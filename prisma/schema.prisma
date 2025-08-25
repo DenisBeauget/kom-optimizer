@@ -1,0 +1,94 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
+}
+
+model User {
+    id        String   @id @default(cuid())
+    stravaId  Int      @unique
+    username  String
+    email     String   @unique
+    firstName String?
+    lastName  String?
+    avatar    String?
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    stravaTokens StravaToken[]
+    routes       OptimizedRoute[]
+
+    @@map("users")
+}
+
+model StravaToken {
+    id           String   @id @default(cuid())
+    userId       String
+    accessToken  String
+    refreshToken String
+    expiresAt    DateTime
+    scope        String
+    createdAt    DateTime @default(now())
+    updatedAt    DateTime @updatedAt
+
+    user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@map("strava_tokens")
+}
+
+model StarredSegment {
+    id              String   @id @default(cuid())
+    stravaSegmentId Int      @unique
+    name            String
+    distance        Float
+    averageGrade    Float
+    maximumGrade    Float
+    elevationHigh   Float
+    elevationLow    Float
+    startLatitude   Float
+    startLongitude  Float
+    endLatitude     Float
+    endLongitude    Float
+    komTime         Int?
+    komAthleteId    Int?
+    polyline        String?
+    lastUpdated     DateTime @default(now())
+
+    routeSegments RouteSegment[]
+
+    @@map("starred_segments")
+}
+
+model OptimizedRoute {
+    id             String   @id @default(cuid())
+    userId         String
+    name           String
+    totalDistance  Float
+    totalElevation Float
+    estimatedTime  Int
+    startLatitude  Float
+    startLongitude Float
+    gpxData        String?
+    createdAt      DateTime @default(now())
+
+    user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+    segments RouteSegment[]
+
+    @@map("optimized_routes")
+}
+
+model RouteSegment {
+    id        String @id @default(cuid())
+    routeId   String
+    segmentId String
+    order     Int
+
+    route   OptimizedRoute @relation(fields: [routeId], references: [id], onDelete: Cascade)
+    segment StarredSegment @relation(fields: [segmentId], references: [id])
+
+    @@unique([routeId, segmentId])
+    @@map("route_segments")
+}
