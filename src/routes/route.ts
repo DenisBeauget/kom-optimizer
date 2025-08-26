@@ -97,7 +97,7 @@ const routeRoutes: FastifyPluginAsync = async (fastify) => {
     
     return {
       success: true,
-      routes: routes.map(route => ({
+      routes: routes.map((route: { id: any; name: any; totalDistance: any; estimatedTime: any; segments: string | any[]; createdAt: any }) => ({
         id: route.id,
         name: route.name,
         totalDistance: route.totalDistance,
@@ -135,7 +135,7 @@ const routeRoutes: FastifyPluginAsync = async (fastify) => {
             latitude: route.startLatitude,
             longitude: route.startLongitude
           },
-          segments: route.segments.map(rs => ({
+          segments: route.segments.map((rs: { order: any; segment: { id: any; name: any; distance: any; komTime: any; startLatitude: any; startLongitude: any } }) => ({
             order: rs.order,
             segment: {
               id: rs.segment.id,
