@@ -2,64 +2,75 @@ import { FastifyPluginAsync } from 'fastify'
 import axios from 'axios'
 
 const authRoutes: FastifyPluginAsync = async (fastify) => {
+  // Mobile auth URL 
+  fastify.get('/strava/mobile-auth-url', async (request, reply) => {
+    const { redirectUri } = request.query as { redirectUri?: string }
 
-
-    // Mobile
-   fastify.get('/strava/mobile-auth-url', async (request, reply) => {
-    const stravaMobileAuthUrl = `https://www.strava.com/oauth/mobile/authorize?client_id=${process.env.STRAVA_CLIENT_ID}&response_type=code&redirect_uri=${process.env.STRAVA_REDIRECT_URI}&approval_prompt=force&scope=read,activity:read_all`
-    
-    return {
-      authUrl: stravaMobileAuthUrl
+    if (!redirectUri) {
+      return reply.status(400).send({ error: 'Missing redirectUri' })
     }
+
+    const state = encodeURIComponent(JSON.stringify({ redirectUri }))
+
+    const stravaMobileAuthUrl = `https://www.strava.com/oauth/authorize?client_id=${
+      process.env.STRAVA_CLIENT_ID
+    }&response_type=code&redirect_uri=${encodeURIComponent(
+      process.env.STRAVA_REDIRECT_URI!
+    )}&approval_prompt=force&scope=read,activity:read_all&state=${state}`
+
+    return { authUrl: stravaMobileAuthUrl }
   })
 
-    // Classic
-    fastify.get('/strava', async (request, reply) => {
+  // Classic web flow
+  fastify.get('/strava', async (request, reply) => {
     const stravaAuthUrl = `https://www.strava.com/oauth/authorize?client_id=${process.env.STRAVA_CLIENT_ID}&response_type=code&redirect_uri=${process.env.STRAVA_REDIRECT_URI}&approval_prompt=force&scope=read,activity:read_all`
-    
     return reply.redirect(stravaAuthUrl)
   })
 
+  // Callback
+  fastify.get('/strava/callback', async (request, reply) => {
+    const { code, error, state } = request.query as {
+      code?: string
+      error?: string
+      state?: string
+    }
 
- fastify.get('/strava/callback', async (request, reply) => {
-    const { code, error } = request.query as { code?: string, error?: string }
-
-
-    const userAgent = request.headers['user-agent'] || ''
-    const isMobileApp = userAgent.includes('Expo') || userAgent.includes('ReactNative') || 
-                       request.headers.referer?.includes('strava://')
+    let redirectUri: string | null = null
+    if (state) {
+      try {
+        const parsed = JSON.parse(decodeURIComponent(state))
+        redirectUri = parsed.redirectUri
+      } catch (e: any) {
+        fastify.log.error('Failed to parse state', e)
+      }
+    }
 
     if (error) {
-      if (isMobileApp && process.env.EXPO_SCHEME) {
-        const deepLink = `${process.env.EXPO_SCHEME}://auth/strava?error=authorization_denied`
-        return reply.redirect(deepLink)
+      if (redirectUri) {
+        return reply.redirect(`${redirectUri}?error=authorization_denied`)
       }
       return reply.status(400).send({ error: 'Strava authorization denied' })
     }
 
     if (!code) {
-      if (isMobileApp && process.env.EXPO_SCHEME) {
-        const deepLink = `${process.env.EXPO_SCHEME}://auth/strava?error=no_code`
-        return reply.redirect(deepLink)
+      if (redirectUri) {
+        return reply.redirect(`${redirectUri}?error=no_code`)
       }
       return reply.status(400).send({ error: 'No authorization code received' })
     }
 
     try {
+      // Exchange code for tokens
       const tokenResponse = await axios.post('https://www.strava.com/oauth/token', {
         client_id: process.env.STRAVA_CLIENT_ID,
         client_secret: process.env.STRAVA_CLIENT_SECRET,
-        code: code,
+        code,
         grant_type: 'authorization_code'
       })
 
-      const { 
-        access_token, 
-        refresh_token, 
-        expires_at, 
-        athlete 
-      } = tokenResponse.data
+      const { access_token, refresh_token, expires_at, athlete } = tokenResponse.data
 
+      // Upsert user
       const user = await fastify.prisma.user.upsert({
         where: { stravaId: athlete.id },
         update: {
@@ -79,6 +90,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         }
       })
 
+      // Upsert token
       await fastify.prisma.stravaToken.upsert({
         where: { userId: user.id },
         update: {
@@ -96,23 +108,26 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         }
       })
 
-      const jwtToken = fastify.jwt.sign({ 
+      const jwtToken = fastify.jwt.sign({
         userId: user.id,
-        stravaId: athlete.id 
+        stravaId: athlete.id
       })
 
-      // deeplink
-      if (isMobileApp && process.env.EXPO_SCHEME) {
-        const deepLink = `${process.env.EXPO_SCHEME}://auth/strava?token=${jwtToken}&success=true&user=${encodeURIComponent(JSON.stringify({
-          id: user.id,
-          username: user.username,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          avatar: user.avatar
-        }))}`
+      // Redirect mobile if redirectUri known
+      if (redirectUri) {
+        const deepLink = `${redirectUri}?token=${jwtToken}&success=true&user=${encodeURIComponent(
+          JSON.stringify({
+            id: user.id,
+            username: user.username,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            avatar: user.avatar
+          })
+        )}`
         return reply.redirect(deepLink)
       }
 
+      // web
       return {
         success: true,
         message: 'Successfully authenticated with Strava',
@@ -125,18 +140,16 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         },
         token: jwtToken
       }
+    } catch (err: any) {
+      fastify.log.error('Strava callback error:', err)
 
-    } catch (error: any) {
-      fastify.log.error('Strava callback error:', error)
-      
-      if (isMobileApp && process.env.EXPO_SCHEME) {
-        const deepLink = `${process.env.EXPO_SCHEME}://auth/strava?error=token_exchange_failed`
-        return reply.redirect(deepLink)
+      if (redirectUri) {
+        return reply.redirect(`${redirectUri}?error=token_exchange_failed`)
       }
-      
-      return reply.status(500).send({ 
+
+      return reply.status(500).send({
         error: 'Failed to exchange authorization code',
-        details: process.env.NODE_ENV === 'development' ? error : undefined
+        details: process.env.NODE_ENV === 'development' ? err : undefined
       })
     }
   })
