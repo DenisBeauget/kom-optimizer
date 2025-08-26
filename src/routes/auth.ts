@@ -24,10 +24,10 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
  fastify.get('/strava/callback', async (request, reply) => {
     const { code, error } = request.query as { code?: string, error?: string }
 
-    // Détection si c'est un appel mobile ou web
+
     const userAgent = request.headers['user-agent'] || ''
     const isMobileApp = userAgent.includes('Expo') || userAgent.includes('ReactNative') || 
-                       request.headers.referer?.includes('strava://') // Vient de l'app Strava
+                       request.headers.referer?.includes('strava://')
 
     if (error) {
       if (isMobileApp && process.env.EXPO_SCHEME) {
@@ -46,7 +46,6 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
-      // Échange sécurisé du code (même logique pour web et mobile)
       const tokenResponse = await axios.post('https://www.strava.com/oauth/token', {
         client_id: process.env.STRAVA_CLIENT_ID,
         client_secret: process.env.STRAVA_CLIENT_SECRET,
@@ -127,7 +126,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         token: jwtToken
       }
 
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error('Strava callback error:', error)
       
       if (isMobileApp && process.env.EXPO_SCHEME) {
@@ -189,7 +188,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
         message: 'Token refreshed successfully'
       }
 
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error('Token refresh error:', error)
       return reply.status(500).send({ 
         error: 'Failed to refresh token',
