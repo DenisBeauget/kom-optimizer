@@ -69,6 +69,7 @@ const routeRoutes: FastifyPluginAsync = async (fastify) => {
           totalDistance: Math.round(result.route.totalDistance),
           totalDuration: Math.round(result.route.totalDuration),
           segments: result.segments,
+          fullGeometry: result.route.fullGeometry,
           waypoints: result.route.waypoints
         }
       }
