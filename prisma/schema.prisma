@@ -26,7 +26,7 @@ model User {
 
 model StravaToken {
     id           String   @id @default(cuid())
-    userId       String
+    userId       String   @unique  
     accessToken  String
     refreshToken String
     expiresAt    DateTime
