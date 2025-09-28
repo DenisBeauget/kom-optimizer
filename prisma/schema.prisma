@@ -44,7 +44,7 @@ model StarredSegment {
     stravaSegmentId Int      @unique
     name            String
     distance        Float
-    activityType    String
+    activityType    String   @default("")
     averageGrade    Float
     maximumGrade    Float
     elevationHigh   Float
