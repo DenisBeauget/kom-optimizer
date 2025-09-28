@@ -5,6 +5,7 @@ export interface StravaSegment {
   id: number
   name: string
   distance: number
+  activity_type: string
   average_grade: number
   maximum_grade: number
   elevation_high: number
@@ -119,7 +120,7 @@ export class StravaService {
         headers: { Authorization: `Bearer ${token}` }
       })
 
-      return response.data
+      return response.data.filter((segment: any) => segment.activity_type === 'Ride')
     } catch (error) {
       console.error('Error fetching starred segments:', error)
       throw new Error('Failed to fetch starred segments from Strava')
@@ -156,6 +157,7 @@ export class StravaService {
         update: {
           name: segment.name,
           distance: segment.distance,
+          activityType: segment.activity_type,
           averageGrade: segment.average_grade,
           maximumGrade: segment.maximum_grade,
           elevationHigh: segment.elevation_high,
@@ -173,6 +175,7 @@ export class StravaService {
           stravaSegmentId: segment.id,
           name: segment.name,
           distance: segment.distance,
+          activityType: segment.activity_type,
           averageGrade: segment.average_grade,
           maximumGrade: segment.maximum_grade,
           elevationHigh: segment.elevation_high,

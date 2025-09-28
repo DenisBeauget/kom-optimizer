@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: strava-auth-db
+    environment:
+      POSTGRES_USER: strava_user
+      POSTGRES_PASSWORD: strava_password
+      POSTGRES_DB: strava_auth
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U strava_user -d strava_auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
